@@ -38,8 +38,8 @@ int comp_count;					// Component of texture
 
 unsigned char* img_data;		// image data
 
-glm::mat4 mvp, projection,  
-		view,  model;			// Model View Projection
+glm::mat4 mvp, mvp2, projection, projection2,  
+		view, view2,  model, model2;			// Model View Projection
 
 sf::Font font;						// Game font
 
@@ -85,7 +85,22 @@ void Game::run()
 			{
 				isRunning = false;
 			}
-
+			if (event.type == sf::Event::KeyPressed)
+			{
+				switch (event.key.code)
+				{
+				case sf::Keyboard::Left:
+					model = translate(model, glm::vec3(0.10f, 0.0f, 0.0f));
+					model2 = translate(model2, glm::vec3(0.10f, 0.0f, 0.0f));
+					break;
+				case sf::Keyboard::Right:
+					model = translate(model, glm::vec3(-0.10f, 0.0f, 0.0f));
+					model2 = translate(model2, glm::vec3(-0.10f, 0.0f, 0.0f));
+					break;
+				default:
+					break;
+				}
+			}
 
 
 
@@ -156,7 +171,7 @@ void Game::run()
 void Game::initialize()
 {
 
-
+	setViews();
 
 	m_player.setPosition(glm::vec3(0.0, 0.0, 5.0));
 	isRunning = true;
@@ -326,7 +341,7 @@ void Game::initialize()
 
 	// Camera Matrix
 	view = lookAt(
-		glm::vec3(0.0f, -4.0f, 10.0f),	// Camera (x,y,z), in World Space
+		glm::vec3(10.0f, -4.0f, 10.0f),	// Camera (x,y,z), in World Space
 		glm::vec3(0.0f, 0.0f, 0.0f),		// Camera looking at origin
 		glm::vec3(0.0f, -1.0f, 0.0f)		// 0.0f, 1.0f, 0.0f Look Down and 0.0f, -1.0f, 0.0f Look Up
 		);
@@ -337,6 +352,22 @@ void Game::initialize()
 		1.0f					// Identity Matrix
 	); 
 
+	model2 = glm::mat4(
+		1.0f
+	);
+
+
+	projection2 = glm::perspective(
+		45.0f,
+		4.0f / 3.0f,
+		5.0f,
+		100.0f);
+
+	view2 = lookAt(
+		glm::vec3(-10.0f, -4.0f,10.0f),
+		glm::vec3(0.0f, 0.0f, 0.0f),
+		glm::vec3(0.0f, -1.0f, 0.0f)
+	);
 	
 	
 	// Enable Depth Test
@@ -364,6 +395,7 @@ void Game::update()
 	// To alter Camera modify view & projection
 	mvp = projection * view * model;
 
+	mvp2 = projection * view * model;
 
 	if (sf::Keyboard::isKeyPressed(sf::Keyboard::Return))
 	{
@@ -398,8 +430,12 @@ void Game::render()
 	text.setFillColor(sf::Color(0, 255, 0, 170));
 	text.setPosition(50.f, 50.f);
 
-	window.draw(text);
 
+
+	window.setView(viewport[0]);
+	window.draw(text);
+	window.setView(viewport[1]);
+	window.draw(text);
 	// Restore OpenGL render states
 	// https://www.sfml-dev.org/documentation/2.0/classsf_1_1RenderTarget.php#a8d1998464ccc54e789aaf990242b47f7
 
@@ -482,9 +518,16 @@ void Game::drawCube(int t_index)
 	glBufferSubData(GL_ARRAY_BUFFER, 3 * VERTICES * sizeof(GLfloat), 4 * COLORS * sizeof(GLfloat), colors);
 	glBufferSubData(GL_ARRAY_BUFFER, ((3 * VERTICES) + (4 * COLORS)) * sizeof(GLfloat), 2 * UVS * sizeof(GLfloat), uvs);
 		
-
-	// Send transformation to shader mvp uniform [0][0] is start of array
-	glUniformMatrix4fv(mvpID, 1, GL_FALSE, &mvp[0][0]);
+	
+	//Send transformation to shader mvp uniform [0][0] is start of array
+	if (t_index == 0 )
+	{
+		glUniformMatrix4fv(mvpID, 1, GL_FALSE, &mvp[0][0]);
+	}
+	else if(t_index == 1)
+	{
+		glUniformMatrix4fv(mvpID, 1, GL_FALSE, &mvp2[0][0]);
+	}
 
 	// Set Active Texture .... 32 GL_TEXTURE0 .... GL_TEXTURE31
 	glActiveTexture(GL_TEXTURE0);
@@ -492,15 +535,18 @@ void Game::drawCube(int t_index)
 
 	// Set the X, Y and Z offset (this allows for multiple cubes via different shaders)
 	// Experiment with these values to change screen positions
-	
-	glUniform1f(x_offsetID, 0.00f);
+	if (t_index == 0)
+	{
+		glUniform1f(x_offsetID, 0.00f);
+	}
+	else if (t_index == 1)
+	{
+		glUniform1f(x_offsetID, 0.00f);
+	}
 	glUniform1f(y_offsetID, 0.00f);
 	glUniform1f(z_offsetID, 0.00f);
 	
-
 	
-
-
 	// Set pointers for each parameter (with appropriate starting positions)
 	// https://www.khronos.org/opengles/sdk/docs/man/xhtml/glVertexAttribPointer.xml
 	glVertexAttribPointer(positionID, 3, GL_FLOAT, GL_FALSE, 0, 0);
@@ -512,12 +558,31 @@ void Game::drawCube(int t_index)
 	glEnableVertexAttribArray(colorID);
 	glEnableVertexAttribArray(uvID);
 
+	if (t_index == 0)
+	{
+		window.setView(viewport[0]);
+		glDrawElements(GL_TRIANGLES, 3 * INDICES, GL_UNSIGNED_INT, NULL);
+	}
+	else if (t_index == 1)
+	{
+		window.setView(viewport[1]);
+		glDrawElements(GL_TRIANGLES, 3 * INDICES, GL_UNSIGNED_INT, NULL);
+	}
+	
+	if (t_index == 0)
+	{
+		glViewport(0, 0, 800 / 2, 600);
+	}
+	else if (t_index == 1)
+	{
+		glViewport(400, 0, 400, 600);
+	}
 
-	glDrawElements(GL_TRIANGLES, 3 * INDICES, GL_UNSIGNED_INT, NULL);
-	if (t_index == 3)
+	if (t_index == 1)
 	{
 		window.display();
 	}
+	
 
 	// Disable Arrays
 	glDisableVertexAttribArray(positionID);
@@ -530,6 +595,18 @@ void Game::drawCube(int t_index)
 
 	// Reset the Shader Program to Use
 	glUseProgram(0);
+}
+
+void Game::setViews()
+{
+	viewport[0].setCenter(400,300);
+	viewport[1].setCenter(400,300);
+
+	viewport[0].setSize(window.getView().getSize());
+	viewport[1].setSize(window.getView().getSize());
+
+	viewport[0].setViewport(sf::FloatRect(0,0,0.5,1));
+	viewport[1].setViewport(sf::FloatRect(0.5, 0, 0.5, 1));
 }
 
 

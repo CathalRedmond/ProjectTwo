@@ -51,6 +51,8 @@ private:
 	static const int NUMBER_OF_VIEWPORTS = 2;
 	sf::View viewport[NUMBER_OF_VIEWPORTS];
 
+	void setViews();
+
 };
 
 #endif  // ! GAME_H
