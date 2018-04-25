@@ -38,8 +38,8 @@ int comp_count;					// Component of texture
 
 unsigned char* img_data;		// image data
 
-glm::mat4 mvp, mvp2, projection, projection2,  
-		view, view2,  model, model2;			// Model View Projection
+glm::mat4 mvp[NUMBER_OF_CUBES], projection[NUMBER_OF_CUBES],
+		view[NUMBER_OF_CUBES], model[NUMBER_OF_CUBES];			// Model View Projection
 
 sf::Font font;						// Game font
 
@@ -52,9 +52,9 @@ Game::Game() :
 }
 
 Game::Game(sf::ContextSettings settings) : 
-	window(sf::VideoMode(800, 600),
+	window(sf::VideoMode::getDesktopMode(),
 	"Introduction to OpenGL Texturing", 
-	sf::Style::Default, 
+	sf::Style::Fullscreen, 
 	settings)
 {
 }
@@ -90,77 +90,43 @@ void Game::run()
 				switch (event.key.code)
 				{
 				case sf::Keyboard::Left:
-					model = translate(model, glm::vec3(0.10f, 0.0f, 0.0f));
-					model2 = translate(model2, glm::vec3(0.10f, 0.0f, 0.0f));
+					// only works if no gyrpscope detected
+					if (!gyroscopeActive)
+					{
+						cameraPositions[0] = rotationMatrix[LEFT] * cameraPositions[0];
+						cameraPositions[1] = rotationMatrix[LEFT] * cameraPositions[1];
+					}
 					break;
 				case sf::Keyboard::Right:
-					model = translate(model, glm::vec3(-0.10f, 0.0f, 0.0f));
-					model2 = translate(model2, glm::vec3(-0.10f, 0.0f, 0.0f));
+					// only works if no gyrpscope detected
+					if (!gyroscopeActive)
+					{
+						cameraPositions[0] = rotationMatrix[RIGHT] * cameraPositions[0];
+						cameraPositions[1] = rotationMatrix[RIGHT] * cameraPositions[1];
+					}
+					break;
+				case sf::Keyboard::Return:
+					
+					DEBUG_MSG(model[0][0].x);
+					DEBUG_MSG(model[0][0].y);
+					DEBUG_MSG(model[0][0].z);
+
+					DEBUG_MSG(model[1][0].x);
+					DEBUG_MSG(model[1][0].y);
+					DEBUG_MSG(model[1][0].z);
+					break;
+				case sf::Keyboard::Escape:
+					isRunning = false;
 					break;
 				default:
 					break;
 				}
 			}
 
-
-
-			// https://www.sfml-dev.org/documentation/2.0/classsf_1_1Clock.php
-			// https://github.com/acron0/Easings
-			// http://robotacid.com/documents/code/Easing.cs
-			// http://st33d.tumblr.com/post/94243475686/easing-equations-for-unity-c
-			// http://easings.net/
-			// http://upshots.org/actionscript/jsas-understanding-easing
-			// https://www.kirupa.com/html5/animating_with_easing_functions_in_javascript.htm
-			// https://medium.com/motion-in-interaction/animation-principles-in-ui-design-understanding-easing-bea05243fe3#.svh4gczav
-			// http://thednp.github.io/kute.js/easing.html
-			// http://gizma.com/easing/#quad1
-			// https://github.com/warrenm/AHEasing
-
-			// VR
-			// https://www.sfml-dev.org/documentation/2.4.2/classsf_1_1Sensor.php
-			// http://en.sfml-dev.org/forums/index.php?topic=9412.msg65594
-			// https://github.com/SFML/SFML/wiki/Tutorial:-Building-SFML-for-Android-on-Windows
-			// https://github.com/SFML/SFML/wiki/Tutorial:-Building-SFML-for-Android
-			// https://www.youtube.com/watch?v=n_JSi6ihDFs
-			// http://en.sfml-dev.org/forums/index.php?topic=8010.0
-			// 
-
-			/*
-			// Set Model Rotation
-			// t = time, b = startvalue, c = change in value, d = duration:
-
-			time = clock.getElapsedTime();
-			std::cout << time.asSeconds() << std::endl;
-			float original = 0.001f;
-			float destination = 0.05f;
-
-			float factor, temp;
-
-			for (int t = 0; t < 5.0f; t++)
-			{
-			factor = gpp::Easing::easeIn(t, original, 0.00001f, 5.0f);
-			cout << "Factor : " << factor << endl;
-			}
-
-
-			factor = gpp::Easing::easeIn(time.asMilliseconds(), original, 0.00001f, 5.0f);
-			cout << "Factor : " << factor << endl;
-			temp = original + ((destination - original) * factor);
-			cout << "Temp : " << factor << endl;
-			model = rotate(model, temp, glm::vec3(0, 1, 0)); // Rotate
-			*/
+			update();
+			render();
 		}
-		//for (int index = 0; index < 12; index++)
-		//{
-
-		//}
-	
-
-		
-		update();
-		render();
 	}
-
 #if (DEBUG >= 2)
 	DEBUG_MSG("Calling Cleanup...");
 #endif
@@ -170,219 +136,231 @@ void Game::run()
 
 void Game::initialize()
 {
+		// checks if gyroscope is detected
+		if (sf::Sensor::isAvailable(sf::Sensor::Gyroscope))
+		{
+			gyroscopeActive = true;
+		}
 
-	setViews();
+		if (gyroscopeActive)
+		{
+			// sets up sensor for the gyroscope if it is detected
+			sf::Sensor::setEnabled(sf::Sensor::Gyroscope, true);
 
-	m_player.setPosition(glm::vec3(0.0, 0.0, 5.0));
-	isRunning = true;
-	GLint isCompiled = 0;
-	GLint isLinked = 0;
+			currentGyroscopeVector = sf::Sensor::getValue(sf::Sensor::Gyroscope);
+		}
 
-	if (!(!glewInit())) { DEBUG_MSG("glewInit() failed"); }
+		rotationAngle = 0.05;
 
-	// Copy UV's to all faces
-	
+		intialiseRotationMatrix();
+		setSfViews();
 
-	DEBUG_MSG(glGetString(GL_VENDOR));
-	DEBUG_MSG(glGetString(GL_RENDERER));
-	DEBUG_MSG(glGetString(GL_VERSION));
+		isRunning = true;
+		GLint isCompiled = 0;
+		GLint isLinked = 0;
 
-	// Vertex Array Buffer
-	glGenBuffers(1, &vbo);		// Generate Vertex Buffer
-	glBindBuffer(GL_ARRAY_BUFFER, vbo);
+		if (!(!glewInit())) { DEBUG_MSG("glewInit() failed"); }
 
-	// Vertices (3) x,y,z , Colors (4) RGBA, UV/ST (2)
-	glBufferData(GL_ARRAY_BUFFER, ((3 * VERTICES) + (4 * COLORS) + (2 * UVS)) * sizeof(GLfloat), NULL, GL_STATIC_DRAW);
-
-	glGenBuffers(1, &vib); //Generate Vertex Index Buffer
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vib);
-
-	// Indices to be drawn
-	glBufferData(GL_ELEMENT_ARRAY_BUFFER, 3 * INDICES * sizeof(GLuint), indices, GL_STATIC_DRAW);
-
-	// NOTE: uniforms values must be used within Shader so that they 
-	// can be retreived
-	const char* vs_src =
-		"#version 400\n\r"
-		""
-		"in vec3 sv_position;"
-		"in vec4 sv_color;"
-		"in vec2 sv_uv;"
-		""
-		"out vec4 color;"
-		"out vec2 uv;"
-		""
-		"uniform mat4 sv_mvp;"
-		"uniform mat4 sv_mvp2;"
-		"uniform float sv_x_offset;"
-		"uniform float sv_y_offset;"
-		"uniform float sv_z_offset;"
-		""
-		"void main() {"
-		"	color = sv_color;"
-		"	uv = sv_uv;"
-		//"	gl_Position = vec4(sv_position, 1);"
-		"	gl_Position = sv_mvp * vec4(sv_position.x + sv_x_offset, sv_position.y + sv_y_offset, sv_position.z + sv_z_offset, 1 );"
-		"}"; //Vertex Shader Src
+		// Copy UV's to all faces
 
 
-	DEBUG_MSG("Setting Up Vertex Shader");
+		DEBUG_MSG(glGetString(GL_VENDOR));
+		DEBUG_MSG(glGetString(GL_RENDERER));
+		DEBUG_MSG(glGetString(GL_VERSION));
 
-	vsid = glCreateShader(GL_VERTEX_SHADER);
-	glShaderSource(vsid, 1, (const GLchar**)&vs_src, NULL);
-	glCompileShader(vsid);
+		// Vertex Array Buffer
+		glGenBuffers(1, &vbo);		// Generate Vertex Buffer
+		glBindBuffer(GL_ARRAY_BUFFER, vbo);
 
-	// Check is Shader Compiled
-	glGetShaderiv(vsid, GL_COMPILE_STATUS, &isCompiled);
+		// Vertices (3) x,y,z , Colors (4) RGBA, UV/ST (2)
+		glBufferData(GL_ARRAY_BUFFER, ((3 * VERTICES) + (4 * COLORS) + (2 * UVS)) * sizeof(GLfloat), NULL, GL_STATIC_DRAW);
 
-	if (isCompiled == GL_TRUE) {
-		DEBUG_MSG("Vertex Shader Compiled");
-		isCompiled = GL_FALSE;
-	}
-	else
-	{
-		DEBUG_MSG("ERROR: Vertex Shader Compilation Error");
-	}
+		glGenBuffers(1, &vib); //Generate Vertex Index Buffer
+		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vib);
 
-	const char* fs_src =
-		"#version 400\n\r"
-		""
-		"uniform sampler2D f_texture;"
-		""
-		"in vec4 color;"
-		"in vec2 uv;"
-		""
-		"out vec4 fColor;"
-		""
-		"void main() {"
-		"	fColor = texture2D(f_texture, uv);"
-		""
-		"}"; //Fragment Shader Src
+		// Indices to be drawn
+		glBufferData(GL_ELEMENT_ARRAY_BUFFER, 3 * INDICES * sizeof(GLuint), indices, GL_STATIC_DRAW);
 
-	DEBUG_MSG("Setting Up Fragment Shader");
+		// NOTE: uniforms values must be used within Shader so that they 
+		// can be retreived
+		const char* vs_src =
+			"#version 400\n\r"
+			""
+			"in vec3 sv_position;"
+			"in vec4 sv_color;"
+			"in vec2 sv_uv;"
+			""
+			"out vec4 color;"
+			"out vec2 uv;"
+			""
+			"uniform mat4 sv_mvp;"
+			"uniform mat4 sv_mvp2;"
+			"uniform float sv_x_offset;"
+			"uniform float sv_y_offset;"
+			"uniform float sv_z_offset;"
+			""
+			"void main() {"
+			"	color = sv_color;"
+			"	uv = sv_uv;"
+			//"	gl_Position = vec4(sv_position, 1);"
+			"	gl_Position = sv_mvp * vec4(sv_position.x + sv_x_offset, sv_position.y + sv_y_offset, sv_position.z + sv_z_offset, 1 );"
+			"}"; //Vertex Shader Src
 
-	fsid = glCreateShader(GL_FRAGMENT_SHADER);
-	glShaderSource(fsid, 1, (const GLchar**)&fs_src, NULL);
-	glCompileShader(fsid);
 
-	// Check is Shader Compiled
-	glGetShaderiv(fsid, GL_COMPILE_STATUS, &isCompiled);
+		DEBUG_MSG("Setting Up Vertex Shader");
 
-	if (isCompiled == GL_TRUE) {
-		DEBUG_MSG("Fragment Shader Compiled");
-		isCompiled = GL_FALSE;
-	}
-	else
-	{
-		DEBUG_MSG("ERROR: Fragment Shader Compilation Error");
-	}
+		vsid = glCreateShader(GL_VERTEX_SHADER);
+		glShaderSource(vsid, 1, (const GLchar**)&vs_src, NULL);
+		glCompileShader(vsid);
 
-	DEBUG_MSG("Setting Up and Linking Shader");
-	progID = glCreateProgram();
-	glAttachShader(progID, vsid);
-	glAttachShader(progID, fsid);
-	glLinkProgram(progID);
+		// Check is Shader Compiled
+		glGetShaderiv(vsid, GL_COMPILE_STATUS, &isCompiled);
 
-	// Check is Shader Linked
-	glGetProgramiv(progID, GL_LINK_STATUS, &isLinked);
+		if (isCompiled == GL_TRUE) {
+			DEBUG_MSG("Vertex Shader Compiled");
+			isCompiled = GL_FALSE;
+		}
+		else
+		{
+			DEBUG_MSG("ERROR: Vertex Shader Compilation Error");
+		}
 
-	if (isLinked == 1) {
-		DEBUG_MSG("Shader Linked");
-	}
-	else
-	{
-		DEBUG_MSG("ERROR: Shader Link Error");
-	}
+		const char* fs_src =
+			"#version 400\n\r"
+			""
+			"uniform sampler2D f_texture;"
+			""
+			"in vec4 color;"
+			"in vec2 uv;"
+			""
+			"out vec4 fColor;"
+			""
+			"void main() {"
+			"	fColor = texture2D(f_texture, uv);"
+			""
+			"}"; //Fragment Shader Src
 
-	// Set image data
-	// https://github.com/nothings/stb/blob/master/stb_image.h
-	img_data = stbi_load(filename.c_str(), &width, &height, &comp_count, 4);
+		DEBUG_MSG("Setting Up Fragment Shader");
 
-	if (img_data == NULL)
-	{
-		DEBUG_MSG("ERROR: Texture not loaded");
-	}
+		fsid = glCreateShader(GL_FRAGMENT_SHADER);
+		glShaderSource(fsid, 1, (const GLchar**)&fs_src, NULL);
+		glCompileShader(fsid);
 
-	glEnable(GL_TEXTURE_2D);
-	glGenTextures(1, &to[0]);
-	glBindTexture(GL_TEXTURE_2D, to[0]);
+		// Check is Shader Compiled
+		glGetShaderiv(fsid, GL_COMPILE_STATUS, &isCompiled);
 
-	// Wrap around
-	// https://www.khronos.org/opengles/sdk/docs/man/xhtml/glTexParameter.xml
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
+		if (isCompiled == GL_TRUE) {
+			DEBUG_MSG("Fragment Shader Compiled");
+			isCompiled = GL_FALSE;
+		}
+		else
+		{
+			DEBUG_MSG("ERROR: Fragment Shader Compilation Error");
+		}
 
-	// Filtering
-	// https://www.khronos.org/opengles/sdk/docs/man/xhtml/glTexParameter.xml
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST); 
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+		DEBUG_MSG("Setting Up and Linking Shader");
+		progID = glCreateProgram();
+		glAttachShader(progID, vsid);
+		glAttachShader(progID, fsid);
+		glLinkProgram(progID);
 
-	// Bind to OpenGL
-	// https://www.khronos.org/opengles/sdk/docs/man/xhtml/glTexImage2D.xml
-	glTexImage2D(
-		GL_TEXTURE_2D,			// 2D Texture Image
-		0,						// Mipmapping Level 
-		GL_RGBA,				// GL_RED, GL_GREEN, GL_BLUE, GL_ALPHA, GL_RGB, GL_BGR, GL_RGBA 
-		width,					// Width
-		height,					// Height
-		0,						// Border
-		GL_RGBA,				// Bitmap
-		GL_UNSIGNED_BYTE,		// Specifies Data type of image data
-		img_data				// Image Data
+		// Check is Shader Linked
+		glGetProgramiv(progID, GL_LINK_STATUS, &isLinked);
+
+		if (isLinked == 1) {
+			DEBUG_MSG("Shader Linked");
+		}
+		else
+		{
+			DEBUG_MSG("ERROR: Shader Link Error");
+		}
+
+		// Set image data
+		// https://github.com/nothings/stb/blob/master/stb_image.h
+		img_data = stbi_load(filename.c_str(), &width, &height, &comp_count, 4);
+
+		if (img_data == NULL)
+		{
+			DEBUG_MSG("ERROR: Texture not loaded");
+		}
+
+		glEnable(GL_TEXTURE_2D);
+		glGenTextures(1, &to[0]);
+		glBindTexture(GL_TEXTURE_2D, to[0]);
+
+		// Wrap around
+		// https://www.khronos.org/opengles/sdk/docs/man/xhtml/glTexParameter.xml
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
+
+		// Filtering
+		// https://www.khronos.org/opengles/sdk/docs/man/xhtml/glTexParameter.xml
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+		// Bind to OpenGL
+		// https://www.khronos.org/opengles/sdk/docs/man/xhtml/glTexImage2D.xml
+		glTexImage2D(
+			GL_TEXTURE_2D,			// 2D Texture Image
+			0,						// Mipmapping Level 
+			GL_RGBA,				// GL_RED, GL_GREEN, GL_BLUE, GL_ALPHA, GL_RGB, GL_BGR, GL_RGBA 
+			width,					// Width
+			height,					// Height
+			0,						// Border
+			GL_RGBA,				// Bitmap
+			GL_UNSIGNED_BYTE,		// Specifies Data type of image data
+			img_data				// Image Data
 		);
 
-	// Projection Matrix 
-	projection = glm::perspective(
-		45.0f,					// Field of View 45 degrees
-		4.0f / 3.0f,			// Aspect ratio
-		5.0f,					// Display Range Min : 0.1f unit
-		100.0f					// Display Range Max : 100.0f unit
+		cameraPositions[0] = glm::vec4(1.32f, -4.0f, 10.0f, 1.0f);
+		cameraPositions[1] = glm::vec4(-1.32f, -4.0f, 10.0f, 1.0f);
+
+		// Projection Matrix 
+		projection[0] = glm::perspective(
+			45.0f,					// Field of View 45 degrees
+			4.0f / 3.0f,			// Aspect ratio
+			5.0f,					// Display Range Min : 0.1f unit
+			100.0f					// Display Range Max : 100.0f unit
+		);
+		
+		// Camera Matrix
+		view[0] = lookAt(
+			glm::vec3(cameraPositions[0]),	// Camera (x,y,z), in World Space
+			glm::vec3(0.0f, 0.0f, 0.0f),		// Camera looking at origin
+			glm::vec3(0.0f, 0.0f, 0.0f)		// 0.0f, 0.0f, 0.0f Look Down and 0.0f, -1.0f, 0.0f Look Up
 		);
 
-	// Camera Matrix
-	view = lookAt(
-		glm::vec3(10.0f, -4.0f, 10.0f),	// Camera (x,y,z), in World Space
-		glm::vec3(0.0f, 0.0f, 0.0f),		// Camera looking at origin
-		glm::vec3(0.0f, -1.0f, 0.0f)		// 0.0f, 1.0f, 0.0f Look Down and 0.0f, -1.0f, 0.0f Look Up
+		// Model matrix
+		model[0] = glm::mat4(
+			1.0f					// Identity Matrix
 		);
 
-
-	// Model matrix
-	model = glm::mat4(
-		1.0f					// Identity Matrix
-	); 
-
-	model2 = glm::mat4(
-		1.0f
-	);
+		
 
 
-	projection2 = glm::perspective(
-		45.0f,
-		4.0f / 3.0f,
-		5.0f,
-		100.0f);
+		projection[1] = glm::perspective(
+			45.0f,
+			4.0f / 3.0f,
+			5.0f,
+			100.0f);
 
-	view2 = lookAt(
-		glm::vec3(-10.0f, -4.0f,10.0f),
-		glm::vec3(0.0f, 0.0f, 0.0f),
-		glm::vec3(0.0f, -1.0f, 0.0f)
-	);
-	
-	
-	// Enable Depth Test
-	glEnable(GL_DEPTH_TEST);
-	glDepthFunc(GL_LESS);
-	glEnable(GL_CULL_FACE);
+		view[1] = lookAt(
+			glm::vec3(cameraPositions[1]),
+			glm::vec3(0.0f, 0.0f, 0.0f),
+			glm::vec3(0.0f, 0.0f, 0.0f)
+		);
 
-	// Load Font
-	font.loadFromFile(".//Assets//Fonts//BBrick.ttf");
+		model[1] = glm::mat4(
+			1.0f
+		);
 
+		// Enable Depth Test
+		glEnable(GL_DEPTH_TEST);
+		glDepthFunc(GL_LESS);
+		glEnable(GL_CULL_FACE);
 
-
-
-
-	
+		// Load Font
+		font.loadFromFile(".//Assets//Fonts//BBrick.ttf");
 }
 
 void Game::update()
@@ -393,15 +371,37 @@ void Game::update()
 	// Update Model View Projection
 	// For mutiple objects (cubes) create multiple models
 	// To alter Camera modify view & projection
-	mvp = projection * view * model;
 
-	mvp2 = projection * view * model;
-
-	if (sf::Keyboard::isKeyPressed(sf::Keyboard::Return))
+	// updates mvp and views
+	for (int index = 0; index < NUMBER_OF_CUBES; index++)
 	{
-		DEBUG_MSG(model[0].x);
-		DEBUG_MSG(model[0].y);
-		DEBUG_MSG(model[0].z);
+		mvp[index] = projection[index] * view[index] * model[index];
+		view[index] = lookAt(
+			glm::vec3(cameraPositions[index]),
+			glm::vec3(0.0f,0.0f,0.0f),
+			glm::vec3(0.0f,-1.0f,0.0f)
+		);
+	}
+
+	if (gyroscopeActive)
+	{
+
+		if (currentGyroscopeVector != sf::Sensor::getValue(sf::Sensor::Gyroscope))
+		{
+			sf::Vector3f tempGyroscopeVector = sf::Sensor::getValue(sf::Sensor::Gyroscope);
+			if (currentGyroscopeVector.y < tempGyroscopeVector.y)
+			{
+				cameraPositions[0] = rotationMatrix[LEFT] * cameraPositions[0];
+				cameraPositions[1] = rotationMatrix[LEFT] * cameraPositions[1];
+			}
+			else if(currentGyroscopeVector.y > tempGyroscopeVector.y)
+			{
+				cameraPositions[0] = rotationMatrix[RIGHT] * cameraPositions[0];
+				cameraPositions[1] = rotationMatrix[RIGHT] * cameraPositions[1];
+
+			}
+		}
+		currentGyroscopeVector = sf::Sensor::getValue(sf::Sensor::Gyroscope);
 	}
 
 }
@@ -427,14 +427,15 @@ void Game::render()
 
 	sf::Text text(hud, font);
 
+	text.setCharacterSize(60);
 	text.setFillColor(sf::Color(0, 255, 0, 170));
 	text.setPosition(50.f, 50.f);
 
+	
 
-
-	window.setView(viewport[0]);
+	window.setView(sfViewport[0]);
 	window.draw(text);
-	window.setView(viewport[1]);
+	window.setView(sfViewport[1]);
 	window.draw(text);
 	// Restore OpenGL render states
 	// https://www.sfml-dev.org/documentation/2.0/classsf_1_1RenderTarget.php#a8d1998464ccc54e789aaf990242b47f7
@@ -443,7 +444,7 @@ void Game::render()
 	
 
 	
-	for (int index = 0; index < 4; index++)
+	for (int index = 0; index < 2; index++)
 	{
 		drawCube(index);
 	}
@@ -522,11 +523,11 @@ void Game::drawCube(int t_index)
 	//Send transformation to shader mvp uniform [0][0] is start of array
 	if (t_index == 0 )
 	{
-		glUniformMatrix4fv(mvpID, 1, GL_FALSE, &mvp[0][0]);
+		glUniformMatrix4fv(mvpID, 1, GL_FALSE, &mvp[0][0][0]);
 	}
 	else if(t_index == 1)
 	{
-		glUniformMatrix4fv(mvpID, 1, GL_FALSE, &mvp2[0][0]);
+		glUniformMatrix4fv(mvpID, 1, GL_FALSE, &mvp[1][0][0]);
 	}
 
 	// Set Active Texture .... 32 GL_TEXTURE0 .... GL_TEXTURE31
@@ -560,22 +561,22 @@ void Game::drawCube(int t_index)
 
 	if (t_index == 0)
 	{
-		window.setView(viewport[0]);
+		window.setView(sfViewport[0]);
 		glDrawElements(GL_TRIANGLES, 3 * INDICES, GL_UNSIGNED_INT, NULL);
 	}
 	else if (t_index == 1)
 	{
-		window.setView(viewport[1]);
+		window.setView(sfViewport[1]);
 		glDrawElements(GL_TRIANGLES, 3 * INDICES, GL_UNSIGNED_INT, NULL);
 	}
 	
 	if (t_index == 0)
 	{
-		glViewport(0, 0, 800 / 2, 600);
+		glViewport(0, 0, sf::VideoMode::getDesktopMode().width / 2, sf::VideoMode::getDesktopMode().height);
 	}
 	else if (t_index == 1)
 	{
-		glViewport(400, 0, 400, 600);
+		glViewport(sf::VideoMode::getDesktopMode().width / 2, 0, sf::VideoMode::getDesktopMode().width / 2, sf::VideoMode::getDesktopMode().height);
 	}
 
 	if (t_index == 1)
@@ -597,16 +598,34 @@ void Game::drawCube(int t_index)
 	glUseProgram(0);
 }
 
-void Game::setViews()
+// sets up the sf::views used for the sf::text object
+void Game::setSfViews()
 {
-	viewport[0].setCenter(400,300);
-	viewport[1].setCenter(400,300);
+	sfViewport[0].setCenter(sf::VideoMode::getDesktopMode().width / 2, sf::VideoMode::getDesktopMode().height / 2);
+	sfViewport[1].setCenter(sf::VideoMode::getDesktopMode().width / 2, sf::VideoMode::getDesktopMode().height / 2);
 
-	viewport[0].setSize(window.getView().getSize());
-	viewport[1].setSize(window.getView().getSize());
+	sfViewport[0].setSize(window.getView().getSize());
+	sfViewport[1].setSize(window.getView().getSize());
 
-	viewport[0].setViewport(sf::FloatRect(0,0,0.5,1));
-	viewport[1].setViewport(sf::FloatRect(0.5, 0, 0.5, 1));
+	sfViewport[0].setViewport(sf::FloatRect(0,0,0.5,1));
+	sfViewport[1].setViewport(sf::FloatRect(0.5, 0, 0.5, 1));
+
+}
+
+// intialise the values of the rotation matrix used.
+void Game::intialiseRotationMatrix()
+{
+	rotationMatrix[LEFT] = glm::mat4x4(glm::cos(-rotationAngle), 0.0f, glm::sin(-rotationAngle), 0.0f,
+									   0.0f, 1.0f, 0.0f, 0.0f,
+									  -glm::sin(-rotationAngle), 0.0f, glm::cos(-rotationAngle), 0.0f,
+									   0.0f, 0.0f, 0.0f, 1.0f);
+
+
+	rotationMatrix[RIGHT] = glm::mat4x4(glm::cos(rotationAngle), 0.0f, glm::sin(rotationAngle), 0.0f,
+									    0.0f, 1.0f, 0.0f, 0.0f,
+									   -glm::sin(rotationAngle), 0.0f, glm::cos(rotationAngle), 0.0f,
+									    0.0f, 0.0f, 0.0f, 1.0f);;
+
 }
 
 

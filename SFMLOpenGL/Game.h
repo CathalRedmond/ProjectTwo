@@ -14,6 +14,8 @@
 #include <SFML/Graphics.hpp>
 #include <SFML/OpenGL.hpp>
 
+//#include <SFML/>
+
 #include <Debug.h>
 
 #define STB_IMAGE_IMPLEMENTATION
@@ -21,6 +23,7 @@
 
 #include "Player.h"
 #include "NPC.h"
+static const int NUMBER_OF_CUBES = 2;
 
 class Game
 {
@@ -30,6 +33,7 @@ public:
 	~Game();
 	void run();
 private:
+
 	sf::RenderWindow window;
 	sf::Clock clock;
 	sf::Time time;
@@ -48,10 +52,21 @@ private:
 
 	void drawCube(int t_index);
 
-	static const int NUMBER_OF_VIEWPORTS = 2;
-	sf::View viewport[NUMBER_OF_VIEWPORTS];
+	sf::View sfViewport[NUMBER_OF_CUBES];
 
-	void setViews();
+	glm::vec4 cameraPositions[NUMBER_OF_CUBES];
+
+	static const int LEFT = 0;
+	static const int RIGHT = 1;
+	glm::mat4 rotationMatrix[2];
+
+	float rotationAngle;
+
+	void setSfViews();
+	void intialiseRotationMatrix();
+
+	bool gyroscopeActive{ false };
+	sf::Vector3f currentGyroscopeVector;
 
 };
 
